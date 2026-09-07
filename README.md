@@ -53,7 +53,7 @@ TaskFlow lets a company's team:
 | DB driver            | mysql-connector-python      |
 | Data handling        | Pandas                      |
 | Charts               | Plotly                      |
-| AI                    | OpenAI API (optional)       |
+| AI                    | Gemini API (optional)       |
 | Password hashing      | bcrypt                       |
 | Config                | python-dotenv                |
 
