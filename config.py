@@ -19,8 +19,16 @@ DB_NAME = os.getenv("DB_NAME", "taskflow_db")
 # ---------------------------------------------------------------------
 # AI / HelpFlow configuration
 # ---------------------------------------------------------------------
+# AI_PROVIDER selects which AI backend HelpFlow uses to phrase answers:
+# "gemini" (Google, has a free tier) or "openai". If neither key is
+# set, HelpFlow automatically falls back to simple template answers.
+AI_PROVIDER = os.getenv("AI_PROVIDER", "gemini")
+
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 AI_MODEL = os.getenv("AI_MODEL", "gpt-4o-mini")
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
 
 # ---------------------------------------------------------------------
 # App branding

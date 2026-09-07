@@ -1,37 +1,5 @@
-"""
-ai/assistant.py
-----------------
-WHAT THIS FILE DOES:
-This is the "brain" of HelpFlow. It receives a user's chat message,
-figures out what they want (using ai/intent.py), fetches the right
-information (from ai/knowledge_base.py or database/tasks.py /
-database/projects.py), and returns a friendly natural-language answer.
 
-WHY IT EXISTS:
-Keeping all of this orchestration in one function -
-get_helpflow_response() - means pages/helpflow.py only has to call one
-simple function and doesn't need to know anything about intents,
-knowledge bases, or SQL.
-
-FUNCTIONS INSIDE THIS FILE:
-- get_helpflow_response(user_id, message) -> the main entry point.
-- _call_ai_model(system_prompt, user_prompt) -> talks to the OpenAI API
-  (if a key is configured) to turn raw data into a natural sentence.
-  If no API key is set, or the call fails, this file falls back to a
-  simple template-based response so HelpFlow still works.
-
-HOW IT CONNECTS TO OTHER FILES:
-- pages/helpflow.py calls get_helpflow_response(user_id, message) for
-  every message the user sends.
-- Uses ai/intent.py to classify the question.
-- Uses ai/knowledge_base.py for APPLICATION_HELP answers.
-- Uses database/tasks.py and database/projects.py for DATABASE_QUERY
-  answers (only through their already-safe, parameterized functions -
-  this file NEVER writes or executes raw SQL).
-- Uses database/chat.py to save every exchange to chat_history.
-"""
-
-from config import OPENAI_API_KEY, AI_MODEL
+from config import AI_PROVIDER, OPENAI_API_KEY, AI_MODEL, GEMINI_API_KEY, GEMINI_MODEL
 from ai.intent import detect_intent, match_knowledge_base_topic, detect_database_topic
 from ai.knowledge_base import KNOWLEDGE_BASE
 from database import tasks as tasks_db
@@ -53,30 +21,51 @@ SYSTEM_PROMPT = (
 )
 
 
+def _call_gemini(user_prompt: str) -> str:
+    """Sends the retrieved facts to Google's Gemini API."""
+    from google import genai
+
+    client = genai.Client(api_key=GEMINI_API_KEY)
+    response = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=f"{SYSTEM_PROMPT}\n\n{user_prompt}",
+    )
+    return response.text.strip()
+
+
+def _call_openai(user_prompt: str) -> str:
+    """Sends the retrieved facts to the OpenAI API."""
+    from openai import OpenAI
+
+    client = OpenAI(api_key=OPENAI_API_KEY)
+    response = client.chat.completions.create(
+        model=AI_MODEL,
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ],
+        max_tokens=300,
+        temperature=0.4,
+    )
+    return response.choices[0].message.content.strip()
+
+
 def _call_ai_model(user_prompt: str) -> str:
     """
-    Sends the retrieved facts to the OpenAI API to turn them into a
-    natural-language answer. If no API key is configured, or the
-    request fails for any reason, returns None so the caller can fall
-    back to a simple template-based response instead.
+    Sends the retrieved facts to whichever AI provider is configured
+    (Gemini or OpenAI, chosen via AI_PROVIDER in config.py) to turn
+    them into a natural-language answer. If no API key is configured
+    for that provider, or the request fails for any reason, returns
+    None so the caller can fall back to a simple template-based
+    response instead.
     """
-    if not OPENAI_API_KEY:
-        return None
-
     try:
-        from openai import OpenAI
-
-        client = OpenAI(api_key=OPENAI_API_KEY)
-        response = client.chat.completions.create(
-            model=AI_MODEL,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
-            max_tokens=300,
-            temperature=0.4,
-        )
-        return response.choices[0].message.content.strip()
+        if AI_PROVIDER == "gemini" and GEMINI_API_KEY:
+            return _call_gemini(user_prompt)
+        elif AI_PROVIDER == "openai" and OPENAI_API_KEY:
+            return _call_openai(user_prompt)
+        else:
+            return None  # no matching provider configured - use fallback
     except Exception as e:
         print(f"[ai/assistant.py] AI model call failed, using fallback: {e}")
         return None
